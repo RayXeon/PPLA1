@@ -30,22 +30,76 @@ allroutes( Start, Finish, Sofar, New ,L) :-
 	allroutes( Start, Finish, [TheRoute|Sofar], New ,L).
 allroutes( _, _, AllRoutes, AllRoutes ,_).
 
+mHead([Head|_],Head).
+mTail([_|Tail],Tail).
+
+
+% Roundabout path calculation.	
+% For precision deal pi later. currently assume pi is 1
+round(EnterAngle,LeaveAngle,Diameters,RoundPathDistance):-
+				EnterAngle \= LeaveAngle,
+				EnterAngle < LeaveAngle,
+				RoundPathDistance is 1 * Diameters * (LeaveAngle-EnterAngle) / 360;
+				EnterAngle \= LeaveAngle,
+				EnterAngle > LeaveAngle,
+				RoundPathDistance is 1 * Diameters * (360-(EnterAngle-LeaveAngle)) / 360;
+				RoundPathDistance is 1 * Diameters.
+
+% Route information Extraction
+routeInfoExtractor(Start,End,Route,DiameterList,Diameter,EnterAngleOfEndPoint,LeaveAngleOfStartPoint,P2PDistance):-
+	nth(1,Route,A),
+	nth(2,Route,B),
+	Start == A,
+	End == B,
+	nth(3,Route,C),
+	P2PDistance is C,
+	nth(4,Route,D),
+	LeaveAngleOfStartPoint is D,
+	nth(5,Route,E),
+	EnterAngleOfEndPoint is E,
+	nth(End,DiameterList,G),
+	Diameter is G.
+
+% Route match.
+matchRoute(Start,End,[X|XS],DiametersList,Diameter,EA,LA,PPD):-
+	routeInfoExtractor(Start,End,X,DiametersList,Diameter,EA,LA,PPD);
+	matchRoute(Start,End,XS,DiametersList,Diameter,EA,LA,PPD).
+
+% One complete route distance calculation. 
+% General Case:
+disCal([X|XXS],Rlist,Dlist,Total):-
+	mHead(XXS,Y),
+	mTail(XXS,XS),
+	mHead(XS,Z),
+	matchRoute(X,Y,Rlist,Dlist,D2,EA2,_,PPD12),
+	matchRoute(Y,Z,Rlist,Dlist,_,_,LA2,_),
+	round(EA2,LA2,D2,RoundPathDistance),
+	DistanceSoFar is PPD12 + RoundPathDistance * 3.14159265359,
+	disCal(XXS,Rlist,Dlist,NTotal),
+	Total is DistanceSoFar + NTotal.
+% End of the route.
+disCal([X,Y],Rlist,Dlist,Total):-
+	matchRoute(X,Y,Rlist,Dlist,_,_,_,Dis),
+	Total is Dis.
+
+%% Result appending.
 addRoutewithDistance([],[],[]).
 addRoutewithDistance([X,Y],X,Y).
 
 calculateDistance([],_,_,_):- nl.
-%last one
 calculateDistance([X|[]],Rlist,Dlist,RoadMap):-
-	dis(X,Rlist,Dlist,Total),
+	disCal(X,Rlist,Dlist,Total),
 	addRoutewithDistance(RoadMap1, Total, X),
 	append([RoadMap1],[],RoadMap).
-%general case		
+
+%% General Case
 calculateDistance([F|R],Rlist,Dlist,RoadMap) :-
-	dis(F,Rlist,Dlist,Total),
+	disCal(F,Rlist,Dlist,Total),
 	calculateDistance(R,Rlist,Dlist,RoadMap2),
 	addRoutewithDistance(RoadMap1, Total, F),
 	append([RoadMap1],RoadMap2,RoadMap).
-		
+
+%% Result representing		
 printmylist([]):- nl.
 printmylist([Head|Tail]) :-
 	nth(1,Head,Item1),
@@ -56,49 +110,6 @@ printmylist([Head|Tail]) :-
 	print(Item2),nl,
 	printmylist(Tail).	
 	
-% roundabout path calculate	
-round(R0,R1,K,X):-
-				R0 \= R1,
-				R0 < R1,
-				X is 3.14159265359 * K * (R1-R0) / 360;
-				R0 \= R1,
-				R0 > R1,
-				X is 3.14159265359 * K * (360-abs(R0-R1)) / 360;
-				X is 3.14159265359 * K.
-
-% route information match
-tablefinder(X,Y,List,Dlist,Dis):-
-	nth(1,List,A),
-	nth(2,List,B),
-	X == A,
-	Y == B,
-	nth(3,List,C),
-	nth(4,List,D),
-	nth(5,List,E),
-	nth(Y,Dlist,F),
-	round(D,E,F,G),
-	Dis is C + G.
-
-% one point to anther distance calculate
-bigt(L,M,[X|XS],Y,Dis):-
-		tablefinder(L,M,X,Y,Dis);
-		bigt(L,M,XS,Y,Dis).
-
-mhead([Head|_],Head).	
-
-
-% this function calculate distance that through whole
-% recursively, calculate piece by piece 
-dis([X|XS],Rlist,Dlist,Total):-
-	mhead(XS,Y),
-	bigt(X,Y,Rlist,Dlist,Dis),
-	K is Dis,
-	dis(XS,Rlist,Dlist,NTotal),
-	Total is K + NTotal.
-
-dis([X,Y],Rlist,Dlist,T):-
-	bigt(X,Y,Rlist,Dlist,Dis),
-	T is Dis.
 
 go :-
 	trip(Start,Stop),
